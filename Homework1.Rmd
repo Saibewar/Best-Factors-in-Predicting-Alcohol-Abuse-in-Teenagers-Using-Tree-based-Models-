@@ -1,0 +1,627 @@
+---
+title: "Homework1"
+author: "Aishwarya Saibewar"
+date: '2023-04-05'
+output:
+  word_document: default
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+#Importing the required libraries
+library(tidyverse)
+library(ISLR2)
+library(tree)
+library(randomForest)
+library(gbm)
+library(dplyr)
+library(tictoc)
+```
+
+# Loading the youth_data.Rdata file
+```{r}
+load("/Users/aishwaryasaibewar/Documents/SeattleUniversity-MSDS/Courses/SU Course Work/SPRING_2023/Statistical Machine Learning 2/Homework/Homework1/Dataset/youth_data.Rdata")
+```
+
+
+# Understanding the dataset
+
+```{r}
+#names(df)
+#str(df)
+#Youth Experience columns
+youth_experience_cols
+```
+
+
+```{r}
+#Substance use columns
+substance_cols
+```
+
+
+```{r}
+#Demographic columns
+demographic_cols
+```
+
+
+
+#DATA CLEANING
+
+*Create a new dataframe with required variables
+
+#substance columns
+
+* iralcfy- alcohol frequency past year (1-365)
+
+* alcflag- alcohol ever used (0/1)
+
+* tobflag- any tobacco ever used (0=never, 1=ever)
+
+* mrjflag- marijuana ever used (0=never, 1=ever)
+
+* alcydays- number of days of alcohol in past month (1-4 categories, 5=none)
+
+#Demographics columns
+
+* HEALTH2- overall health(Excellent / Very Good / Good / Fair or Poor)
+
+* EDUSCHGRD2- what grade in now/will be in (11 categories, 98,99= blank/skip)
+
+* irsex- gender (1=male, 2=female)
+
+#Youth Experiences
+
+* YOFIGHT2- youth had serious fight at school/work(one or more times/none)
+
+* govtprog- got gov assistance (1=yes, 2=no)
+
+* income- family income
+
+* COUTYP4- metro size status (1=large metro, 2=small metro, 3=nonmetro)
+
+
+
+```{r}
+#creating new dataframe with selected variables
+selected_data <-df %>%
+  dplyr::select(alcflag,iralcfy,tobflag,mrjflag,alcydays,HEALTH2,EDUSCHGRD2,irsex,YOFIGHT2,govtprog,income,COUTYP4) 
+selected_data
+```
+
+#Find the count of missing values in each column
+```{r}
+missing <- colSums(is.na(selected_data))
+missing
+```
+
+#Impute the missing values of the categorical variable with the mode of the non-missing values.
+
+*We have missing values in two columns HEALTH2 and YOFIGHT2.
+
+```{r}
+#For HEALTH2
+a<-table(selected_data$HEALTH2)
+```
+
+```{r}
+health_mode <- names(sort(a, decreasing = TRUE))[1]
+```
+
+```{r}
+selected_data$HEALTH2[is.na(selected_data$HEALTH2)] <- health_mode
+```
+
+
+```{r}
+#For YOFIGHT2
+b<-table(selected_data$YOFIGHT2)
+```
+
+```{r}
+fight_mode <- names(sort(b, decreasing = TRUE))[1]
+```
+
+```{r}
+selected_data$YOFIGHT2[is.na(selected_data$YOFIGHT2)] <- fight_mode 
+```
+
+
+#Manipulating iralcfy column
+
+```{r}
+#For Regression (4722 + 126 = 4848) records out of 5500 are 
+#991 = NEVER USED ALCOHOL
+#993 = DID NOT USE ALCOHOL PAST YEAR
+
+#As it represents the teen who have never consumed alcohol. Modify its values to int 0.
+
+selected_data$iralcfy[selected_data$iralcfy %in% c(991, 993)] <- 0
+```
+
+
+#Manipulating alcflag column
+```{r}
+#Modify to Yes/No flag in alcflag 
+selected_data$alcflag <-  ifelse(selected_data$alcflag == 0, "No", "Yes")
+```
+
+
+
+#Manipulating tobflag column
+```{r}
+#Modify to Yes/No flag in tobflag 
+selected_data$tobflag <-  ifelse(selected_data$tobflag == 0, "No", "Yes")
+```
+
+
+#Manipulating mrjflag column
+```{r}
+#Modify to Yes/No flag in mrjflag 
+selected_data$mrjflag <-  ifelse(selected_data$mrjflag == 0, "No", "Yes")
+```
+
+
+#Manipulating alcydays column
+
+```{r}
+#Modify the categories to seldom, sometimes, never used and frequent, based on the number of days of alcohol consumption in a year 
+selected_data$alcydays <- ifelse(selected_data$alcydays == 6, "Never used", #6 = Non User or No Past Year Use
+                          ifelse(selected_data$alcydays <= 2, "Seldom",     #1 = 1-11 Days 
+                                                                            #2 = 12-49 Days
+                          ifelse(selected_data$alcydays == 3, "Sometimes",  #3 = 50-99 Days
+                                 "Frequent")))                              #4 = 100-299 Days
+                                                                            #5 = 300-365 Days
+                          
+```
+
+
+#Manipulating HEALTH2 column
+```{r}
+#levels of the HEALTH2
+levels(selected_data$HEALTH2)
+```
+
+```{r}
+#Modify the categories to meaningful ones
+selected_data$HEALTH2 <- factor(selected_data$HEALTH2, levels = c(1, 2 , 3 , 4), labels = c("Excellent", "Very Good", "Good", "Poor"))
+```
+
+
+#Manipulating EDUSCHGRD2 column
+
+```{r}
+#levels of the EDUSCHGRD2
+levels(selected_data$EDUSCHGRD2)
+```
+
+```{r}
+#Modify the categories to meaningful ones
+selected_data$EDUSCHGRD2 <- factor(selected_data$EDUSCHGRD2, levels = c("1" , "2" , "3" , "4" , "5" , "6" , "7" , "8" , "9" , "10", "98", "99"), labels = c("0-5", "6", "7", "8","9","10","11","12","College-1","College-2,3", "No answer", "Skip"))
+
+```
+
+```{r}
+#levels of the EDUSCHGRD2
+levels(selected_data$EDUSCHGRD2)
+```
+
+
+#Manipulating irsex column
+```{r}
+#Create meaningful values for irsex 
+selected_data$irsex <-  ifelse(selected_data$irsex == 1, "Male", "Female")
+```
+
+
+
+#Manipulating YOFIGHT2 column
+
+```{r}
+#levels of the YOFIGHT2
+levels(selected_data$YOFIGHT2)
+```
+
+```{r}
+#Create meaningful values for YOFIGHT2 
+selected_data$YOFIGHT2 <-  ifelse(selected_data$YOFIGHT2 == 1, "Never", "1-2 times")
+```
+
+
+#Manipulating govtprog column
+```{r}
+#Create meaningful values for mrjflag 
+selected_data$govtprog <-  ifelse(selected_data$govtprog == 1, "Yes", "No")
+```
+
+
+#Modify income column
+```{r}
+#Create meaningful values for income 
+selected_data$income <- factor(selected_data$income, levels = c("1" , "2" , "3" , "4"), labels = c("< $20k", "$20k-$49,999", "$50k-$74,999", ">= $75k"))
+
+```
+
+```{r}
+#levels of the income
+levels(selected_data$income)
+```
+
+
+#Manipulating COUTYP4 column
+```{r}
+# Check the levels of the COUTYP4
+levels(selected_data$COUTYP4)
+```
+
+```{r}
+#Create meaningful values for COUTYP4 
+selected_data$COUTYP4 <- factor(selected_data$COUTYP4, levels = c(1, 2 , 3), labels = c("Large Metro", "Small Metro", "Non Metro"))
+```
+
+```{r}
+selected_data$COUTYP4 <- factor(selected_data$COUTYP4,level=c("Large Metro", "Small Metro", "Non Metro"))
+```
+
+
+
+
+#Change the datatype of variables
+```{r}
+#Change the datatype of variables to factors
+selected_data$alcflag<- as.factor(selected_data$alcflag)
+selected_data$iralcfy<-as.numeric(selected_data$iralcfy)
+selected_data$tobflag<-as.factor(selected_data$tobflag)
+selected_data$mrjflag<-as.factor(selected_data$mrjflag)
+selected_data$alcydays<-as.factor(selected_data$alcydays)
+
+selected_data$HEALTH2<- as.factor(selected_data$HEALTH2)
+selected_data$EDUSCHGRD2<- as.factor(selected_data$EDUSCHGRD2)
+selected_data$irsex<-as.factor(selected_data$irsex)
+
+selected_data$YOFIGHT2<-as.factor(selected_data$YOFIGHT2)
+selected_data$govtprog<-as.factor(selected_data$govtprog)
+selected_data$income<- as.factor(selected_data$income)
+selected_data$COUTYP4<-as.factor(selected_data$COUTYP4)
+```
+
+```{r}
+#structure of selected_data
+str(selected_data)
+```
+
+
+
+#Rename the column names of df_Binary
+
+```{r}
+colnames(selected_data) <- c(("CONSUMED_ALCOHOL"),("ALCOHOL_FREQUENCY"),("CONSUMED_TOBACCO"),("CONSUMED_MARIJUANA"),("ALCOHOL_DAYS"),("HEALTH_STATUS"),("EDUCATION_STATUS"),("GENDER"),("YOUTH_FIGHTS"),("GOVT_ASSISTANCE"),("TOTAL_INCOME"),("METRO_STATUS"))
+
+```
+
+
+
+
+##### PROBLEM-1
+
+#Creating Binary Classification Model
+
+
+```{r}
+#select variables for binary classification
+df_Binary <-selected_data %>%
+  dplyr::select(CONSUMED_ALCOHOL,CONSUMED_TOBACCO,CONSUMED_MARIJUANA,HEALTH_STATUS,EDUCATION_STATUS,GENDER,YOUTH_FIGHTS,GOVT_ASSISTANCE,TOTAL_INCOME,METRO_STATUS) 
+
+```
+
+
+```{r}
+#Split the data into train and test by considering 70% of data as training data and reserving the remaining 30% of data as test data
+
+set.seed(1)
+train <- sample(nrow(df_Binary) * 0.7)
+binary.train <- df_Binary[train, ]
+binary.test <- df_Binary[-train, ]
+```
+
+#Fit a decision tree model
+
+```{r}
+tic()
+tree.CONSUMED_ALCOHOL <- tree(CONSUMED_ALCOHOL ~ . , binary.train)
+toc()
+```
+
+```{r}
+#summary of the model
+summary(tree.CONSUMED_ALCOHOL)
+```
+"CONSUMED_MARIJUANA" , "EDUCATION_STATUS"  , "CONSUMED_TOBACCO" are the important variables considered for tree construction.
+The tree has 4 terminal nodes. 630 Observations out of 3849 were classified incorrectly with a training error rate of 16.37%.
+
+
+```{r}
+tree.CONSUMED_ALCOHOL
+```
+
+
+```{r}
+#plot the decision tree
+plot(tree.CONSUMED_ALCOHOL)
+text(tree.CONSUMED_ALCOHOL, pretty = 0)
+title(main = "Teenager Alcohol Consumption classification tree")
+```
+Tree Interpretation:
+
+The most important variable for predicting whether a teen has ever consumed alcohol or not is CONSUMED_MARIJUANA since the first split criterion starts at the top of the tree. It is subdivided into two branches: if the teen has not consumed marijuana (Left-hand branch) and if the person has consumed marijuana (Right-hand branch). 
+
+i.	Students who have smoked tobacco and are under the ninth grade are more likely to consume alcohol.
+ii.	Similarly, students who have not smoked tobacco and are under the ninth grade are unlikely to consume alcohol.
+iii.	Teens who have consumed marijuana are likely to consume alcohol.
+
+
+
+```{r}
+#Predicting the tree based model
+tree.pred <- predict(tree.CONSUMED_ALCOHOL, binary.test,type = "class")
+
+#Confusion matrix
+table(tree.pred,binary.test$CONSUMED_ALCOHOL)
+```
+
+
+```{r}
+errorrate<- mean(binary.test$CONSUMED_ALCOHOL!=tree.pred)
+cat("Test error rate for binary classification is ", errorrate)
+```
+
+```{r}
+accuracy<- mean(binary.test$CONSUMED_ALCOHOL==tree.pred)
+cat("Test accuracy for binary classification is ", accuracy)
+```
+
+
+
+
+##### PROBLEM-2
+
+#Create multi-class classification model
+
+
+```{r}
+#select variables for multiclass classification
+df_multiclass <-selected_data %>%
+  dplyr::select(CONSUMED_TOBACCO,CONSUMED_MARIJUANA,ALCOHOL_DAYS,HEALTH_STATUS,EDUCATION_STATUS,GENDER,YOUTH_FIGHTS,GOVT_ASSISTANCE,TOTAL_INCOME,METRO_STATUS) 
+
+```
+
+
+
+```{r}
+#Split the data into train and test by considering 70% of data as training data and reserving the remaining 30% of data as test data
+set.seed(1)
+train <- sample(nrow(df_multiclass) * 0.7)
+multi.train <- df_multiclass[train, ]
+multi.test <- df_multiclass[-train, ]
+```
+
+
+#Implement the Bagging model for multi-class classification
+
+```{r}
+npredictors=length(multi.train)
+tic()
+bag.ALCOHOL_DAYS <- randomForest(ALCOHOL_DAYS ~ ., data = multi.train, mtry = npredictors, importance = TRUE,ntree=100)
+bag.ALCOHOL_DAYS
+toc()
+```
+
+
+```{r}
+#Predicting the model on test dat
+ALCOHOL_DAYS.pred <- predict(bag.ALCOHOL_DAYS, multi.test,type = "class")
+Predicted<-ALCOHOL_DAYS.pred
+Actual<-multi.test$ALCOHOL_DAYS
+#table(multi.test$ALCOHOL_DAYS,ALCOHOL_DAYS.pred)
+#mean(multi.test$ALCOHOL_DAYS!=ALCOHOL_DAYS.pred)
+table(Actual,Predicted)
+errorrate<- mean(Actual!=Predicted)
+cat("Test error rate for multi-class classification using bagging is ", errorrate)
+
+```
+
+```{r}
+accuracy<-mean(Actual==Predicted)
+cat("Test accuracy for multi-class classification using bagging is ", accuracy)
+```
+
+
+
+
+#Implement the Random Forest model for multi-class classification
+
+```{r}
+tic()
+rf.ALCOHOL_DAYS <- randomForest(ALCOHOL_DAYS ~ ., data = multi.train, mtry = sqrt(npredictors), importance = TRUE,ntree=100)
+rf.ALCOHOL_DAYS
+toc()
+```
+
+
+```{r}
+ALCOHOL_DAYS.pred <- predict(rf.ALCOHOL_DAYS, multi.test,type = "class")
+Predicted<-ALCOHOL_DAYS.pred
+Actual<-multi.test$ALCOHOL_DAYS
+#table(multi.test$ALCOHOL_DAYS,ALCOHOL_DAYS.pred)
+#mean(multi.test$ALCOHOL_DAYS!=ALCOHOL_DAYS.pred)
+table(Actual,Predicted)
+errorrate<- mean(Actual!=Predicted)
+cat("Test error rate for multi-class classification using Random Forest is ", errorrate)
+```
+
+```{r}
+accuracy<-mean(Actual==Predicted)
+cat("Test accuracy for multi-class classification using Random Forest is ", accuracy)
+```
+
+It can be seen that the error rate is less for the random forest model compared to the bagging model
+
+
+```{r}
+#importance of each predictor
+importance(rf.ALCOHOL_DAYS)
+```
+
+
+```{r}
+#Plot the importance of each predictor
+varImpPlot(rf.ALCOHOL_DAYS, main = "Variable Importance Plot")
+```
+
+
+```{r}
+#Plot the variable importance plot using ggplot for better representation
+var_imp_plot <- data.frame(imp_mean_decrease_accuracy = rf.ALCOHOL_DAYS$importance[,"MeanDecreaseAccuracy"],
+                         Variables = row.names(rf.ALCOHOL_DAYS$importance))
+```
+
+```{r}
+  ggplot(data = var_imp_plot, aes(x = reorder(Variables, imp_mean_decrease_accuracy), 
+                                y = imp_mean_decrease_accuracy))+
+  geom_bar(stat = "identity", fill = "dodgerblue") +
+  coord_flip() + xlab("Variables") + ylab("Mean Decrease Accuracy") + ggtitle("Variable Importance Plot for Random Forest Model")
+```
+ 
+* From the plot, it can be observed that CONSUMED_MARIJUANA is the most important variable, followed by CONSUMED_TOBACCO, EDUCATION_STATUS, and METRO_STATUS.
+
+
+
+```{r}
+# Plotting the oob error vs number of trees for bagging and random forest models:
+ALCOHOL_DAYS.err <- data.frame(
+  Trees=1:bag.ALCOHOL_DAYS$ntree,
+  Error=c(bag.ALCOHOL_DAYS$err.rate[,"OOB"],rf.ALCOHOL_DAYS$err.rate[,"OOB"]),
+  Type=rep(c("Bagging with m=p", "RF with m=sqrt(p)"), each=bag.ALCOHOL_DAYS$ntree)
+)
+```
+
+```{r}
+ggplot(data=ALCOHOL_DAYS.err, aes(x=Trees, y=Error)) +  geom_line(aes(color=Type)) + xlab("Trees") + ylab("OOB Error") + ggtitle("OOB Error vs Number of Trees") + xlim(0,100)
+```
+From the plot, it can be seen that the random forest model has lower OOB error compared to the bagging model.
+
+
+
+
+
+
+##### PROBLEM-3
+
+#Regression-Days per year used alcohol
+
+
+```{r}
+#select variables for regression problem
+df_regression <-selected_data %>%
+  dplyr::select(ALCOHOL_FREQUENCY,CONSUMED_TOBACCO,CONSUMED_MARIJUANA,HEALTH_STATUS,EDUCATION_STATUS,GENDER,YOUTH_FIGHTS,GOVT_ASSISTANCE,TOTAL_INCOME,METRO_STATUS) 
+
+```
+
+
+```{r}
+#Split the data into train and test by considering 70% of data as training data and reserving the remaining 30% of data as test data
+set.seed(1)
+train <- sample(nrow(df_regression) * 0.7)
+reg.train <- df_regression[train, ]
+reg.test <- df_regression[-train, ]
+```
+
+
+#Fit the Boosting for different interaction depths
+
+#When d=1
+```{r}
+set.seed(1)
+tic()
+boost.ALCOHOL_FREQUENCY1 <- gbm(ALCOHOL_FREQUENCY ~ ., data = reg.train,distribution = "gaussian", n.trees=1000, interaction.depth = 1,shrinkage = 0.01, verbose = F)
+toc()
+
+#Compute the training error
+ALCOHOL_FREQUENCY.pred1 <- predict(boost.ALCOHOL_FREQUENCY1, newdata = reg.train, n.trees = 1000)
+training.err1<- mean((ALCOHOL_FREQUENCY.pred1 - reg.train$ALCOHOL_FREQUENCY)^2)
+cat("Training MSE at depth 1 is ", training.err1)
+
+#Compute the test Error
+ALCOHOL_FREQUENCY.pred1 <- predict(boost.ALCOHOL_FREQUENCY1, newdata = reg.test, n.trees = 1000)
+test.err1<- mean((ALCOHOL_FREQUENCY.pred1 - reg.test$ALCOHOL_FREQUENCY)^2)
+cat("Test MSE at depth 1 is ", test.err1)
+
+```
+
+The average squared difference between the predicted and actual values in the test data is 186.85. This value is higher and looks like the model didn't fit the data rightly.
+#When d=2
+```{r}
+set.seed(1)
+tic()
+boost.ALCOHOL_FREQUENCY2 <- gbm(ALCOHOL_FREQUENCY ~ ., data = reg.train,distribution = "gaussian", n.trees=1000, interaction.depth = 2,shrinkage = 0.01, verbose = F)
+toc()
+
+#Compute the training error
+ALCOHOL_FREQUENCY.pred2 <- predict(boost.ALCOHOL_FREQUENCY2, newdata = reg.train, n.trees = 1000)
+training.err2<-mean((ALCOHOL_FREQUENCY.pred2 - reg.train$ALCOHOL_FREQUENCY)^2)
+cat("Training MSE at depth 2 is ", training.err2)
+
+#Compute the test error
+ALCOHOL_FREQUENCY.pred2 <- predict(boost.ALCOHOL_FREQUENCY2, newdata = reg.test, n.trees = 1000)
+test.err2<- mean((ALCOHOL_FREQUENCY.pred2 - reg.test$ALCOHOL_FREQUENCY)^2)
+cat("Test MSE at depth 2 is ", test.err2)
+
+```
+
+#When d=3
+```{r}
+set.seed(1)
+tic()
+boost.ALCOHOL_FREQUENCY3 <- gbm(ALCOHOL_FREQUENCY ~ ., data = reg.train,distribution = "gaussian", n.trees=1000, interaction.depth = 3,shrinkage = 0.01, verbose = F)
+toc()
+
+#Training Error
+ALCOHOL_FREQUENCY.pred3 <- predict(boost.ALCOHOL_FREQUENCY3, newdata = reg.train, n.trees = 1000)
+training.err2<-mean((ALCOHOL_FREQUENCY.pred3 - reg.train$ALCOHOL_FREQUENCY)^2)
+cat("Training MSE at depth 2 is ", training.err2)
+
+#Test Error
+ALCOHOL_FREQUENCY.pred3 <- predict(boost.ALCOHOL_FREQUENCY3, newdata = reg.test, n.trees = 1000)
+test.err2<- mean((ALCOHOL_FREQUENCY.pred3 - reg.test$ALCOHOL_FREQUENCY)^2)
+cat("Test MSE at depth 2 is ", test.err2)
+```
+
+
+```{r}
+# Plotting the number of trees vs taining error for all the boosting models
+
+#creat a new dataframe
+ALCOHOL_FREQ.err <- data.frame(
+  Trees=1:1000,
+  Error=c(boost.ALCOHOL_FREQUENCY1$train.error,boost.ALCOHOL_FREQUENCY2$train.error,boost.ALCOHOL_FREQUENCY3$train.error),
+  Type=rep(c("BOOSTING with d=1 and s=0.01","BOOSTING with d=2 and s=0.01","BOOSTING with d=3 and s=0.01"),each=1000)
+)
+```
+
+```{r}
+#plot using ggplot
+ggplot(data=ALCOHOL_FREQ.err, aes(x=Trees, y=Error)) +  geom_line(aes(color=Type)) + xlab("Trees") + ylab("Training Error") + ggtitle("Number of Trees vs Training Error") + xlim(0,1000)
+```
+
+It can be observed that the training error is the least when the gradient boosting model has an interaction depth of 3. The training errors when depth is 1, 2, and 3 are 423, 409, and 384 respectively. Similarly, the mean square error on the test data at interaction depths 1, 2, and 3 are 120.30, 120.39, and 126.89 respectively. Although, on the training data the least mean square error is at depth 3, on the actual test data, the lowest mean square error is observed at depth 1. Therefore, the best model for the test data has an interaction depth of 1 and a shrinkage parameter of 0.01.
+
+
+
+
+
